@@ -270,7 +270,9 @@ void loop() {
   // Read UV and calculate values to send to bluetooth
   uv_inst = uv.readUVI()*25;
   uv_total = uv_total + uv_inst;
+  uv_adjusted = (uv_total/(SPF*1000));
   uv_percent = (uv_total/(MED*SPF*1000))*100;
+  time_to_burn = (MED - uv_adjusted)/(uv_inst*60);
   Serial.print("UV Index reading: "); Serial.println(uv.readUVI());
   Serial.print("Current UV Energy: "); Serial.println(uv_inst);
   Serial.print("Total UV absorbed: "); Serial.println(uv_total); 
@@ -279,6 +281,7 @@ void loop() {
   // Send UV percentage to bluetooth
   ble.print("Total UV absorbed: "); ble.println(uv_total);
   ble.print("Percent of UV absorbed before burn: "); ble.println(uv_percent);
+  ble.print("Time to burn: "); ble.println(time_to_burn);
   
 
   if(uv_percent >= 100)
