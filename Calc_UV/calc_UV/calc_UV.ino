@@ -1,24 +1,24 @@
 /*!
- * @file veml6075_fulltest.ino
- *
- * A complete test of the library API with various settings available
- * 
- * Designed specifically to work with the VEML6075 sensor from Adafruit
- * ----> https://www.adafruit.com/products/3964
- *
- * These sensors use I2C to communicate, 2 pins (SCL+SDA) are required
- * to interface with the breakout.
- *
- * Adafruit invests time and resources providing this open source code,
- * please support Adafruit and open-source hardware by purchasing
- * products from Adafruit!
- *
- * Written by Limor Fried/Ladyada for Adafruit Industries.  
- *
- * MIT license, all text here must be included in any redistribution.
- *
- */
- 
+   @file veml6075_fulltest.ino
+
+   A complete test of the library API with various settings available
+
+   Designed specifically to work with the VEML6075 sensor from Adafruit
+   ----> https://www.adafruit.com/products/3964
+
+   These sensors use I2C to communicate, 2 pins (SCL+SDA) are required
+   to interface with the breakout.
+
+   Adafruit invests time and resources providing this open source code,
+   please support Adafruit and open-source hardware by purchasing
+   products from Adafruit!
+
+   Written by Limor Fried/Ladyada for Adafruit Industries.
+
+   MIT license, all text here must be included in any redistribution.
+
+*/
+
 #include <Wire.h>
 #include <SPI.h>
 #include <Arduino.h>
@@ -29,30 +29,30 @@
 #include "BluefruitConfig.h"
 
 #if SOFTWARE_SERIAL_AVAILABLE
-  #include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
 #endif
 
 /*=========================================================================
     APPLICATION SETTINGS
 
-    FACTORYRESET_ENABLE       Perform a factory reset when running this sketch
-   
-                              Enabling this will put your Bluefruit LE module
+      FACTORYRESET_ENABLE       Perform a factory reset when running this sketch
+     
+                                Enabling this will put your Bluefruit LE module
                               in a 'known good' state and clear any config
                               data set in previous sketches or projects, so
-                              running this at least once is a good idea.
-   
-                              When deploying your project, however, you will
+                                running this at least once is a good idea.
+     
+                                When deploying your project, however, you will
                               want to disable factory reset by setting this
                               value to 0.  If you are making changes to your
-                              Bluefruit LE device via AT commands, and those
+                                Bluefruit LE device via AT commands, and those
                               changes aren't persisting across resets, this
                               is the reason why.  Factory reset will erase
                               the non-volatile memory where config data is
                               stored, setting it back to factory default
                               values.
-       
-                              Some sketches that require you to bond to a
+         
+                                Some sketches that require you to bond to a
                               central device (HID mouse, keyboard, etc.)
                               won't work at all with this feature enabled
                               since the factory reset will clear all of the
@@ -63,10 +63,10 @@
                               "DISABLE" or "MODE" or "BLEUART" or
                               "HWUART"  or "SPI"  or "MANUAL"
     -----------------------------------------------------------------------*/
-    #define FACTORYRESET_ENABLE         1
-    #define MINIMUM_FIRMWARE_VERSION    "0.6.6"
-    #define MODE_LED_BEHAVIOUR          "MODE"
-    #define DEBUG                       1
+#define FACTORYRESET_ENABLE         1
+#define MINIMUM_FIRMWARE_VERSION    "0.6.6"
+#define MODE_LED_BEHAVIOUR          "MODE"
+#define DEBUG                       1
 /*=========================================================================*/
 
 // Create the hardware serial bluefruit object
@@ -81,12 +81,23 @@ void error(const __FlashStringHelper*err) {
   while (1);
 }
 
-int skin_type  = 1;
+#define WAIT_FOR_USER   0
+#define GET_SKIN_TYPE   1
+#define GET_SPF         2
+#define SEND_UV         3
+#define BUFFSIZE        10
+
+
+//int state = WAIT_FOR_USER;
+int state = SEND_UV;
+int skin_type = 0;
 int SPF = 1;
-float MED = 30.0;
+float MED = 30.0e3;
 float uv_inst = 0.0;
 float uv_total = 0.0;
 float uv_percent = 0.0;
+float uv_adjusted = 0.0;
+float time_to_burn = 0.0;
 
 
 /**************************************************************************/
@@ -160,7 +171,7 @@ void setup_BLE(void)
   {
     /* Perform a factory reset to make sure everything is in a known state */
     Serial.println(F("Performing a factory reset: "));
-    if ( ! ble.factoryReset() ){
+    if ( ! ble.factoryReset() ) {
       error(F("Couldn't factory reset"));
     }
   }
@@ -180,7 +191,7 @@ void setup_BLE(void)
 
   /* Wait for connection */
   while (! ble.isConnected()) {
-      delay(500);
+    delay(500);
   }
 
   Serial.println(F("******************************"));
@@ -207,56 +218,12 @@ void setup_BLE(void)
 */
 /**************************************************************************/
 void setup(void) {
-  while (!Serial);  // comment out if not debugging/ not using the serial port (i.e. running off battery)
+  //while (!Serial);  // comment out if not debugging/ not using the serial port (i.e. running off battery)
   delay(500);
   Serial.begin(115200);
   setup_UV();
   setup_BLE();
-
-
-  // Check for incoming characters from Bluefruit
-  Serial.println("Enter Skin Type (1-6):");
-
-   /* Wait for connection */
-  while (!ble.available()) {}
-  ble.readline();
-  ble.flush();
-  ble.println("SETUP");
-  ble.println("Enter Skin Type (1-6):");
-  while(1)
-  {
-    ble.readline();
-    if (isdigit(ble.buffer[0])) {
-      skin_type = atoi(ble.buffer);
-      Serial.print("Skin type entered: "); Serial.println(skin_type);
-      ble.print("Skin type entered: "); ble.println(skin_type);
-      break;
-    }
-  }
-
-  Serial.println(F("Enter SPF:"));
-  ble.println("Enter SPF:");
-  while(1)
-  {
-    ble.readline();
-    if (isdigit(ble.buffer[0])) {
-      SPF = atoi(ble.buffer);
-      Serial.print("SPF enetered: "); Serial.println(SPF);
-      ble.print(F("SPF enetered: ")); ble.println(SPF);
-      break;
-    }
-  }
-
-  // Set the MED for the skin type
-  switch (skin_type) {
-    case 1: MED = 150; break;
-    case 2: MED = 250; break;
-    case 3: MED = 300; break;
-    case 4: MED = 400; break;
-    case 5: MED = 600; break;
-    case 6: MED = 900; break;
-  }
-
+  Serial.println("Setup finished");
 }
 
 
@@ -267,29 +234,189 @@ void setup(void) {
 /**************************************************************************/
 void loop() {
 
-  // Read UV and calculate values to send to bluetooth
-  uv_inst = uv.readUVI()*25;
-  uv_total = uv_total + uv_inst;
-  uv_adjusted = (uv_total/(SPF*1000));
-  uv_percent = (uv_total/(MED*SPF*1000))*100;
-  time_to_burn = (MED - uv_adjusted)/(uv_inst*60);
-  Serial.print("UV Index reading: "); Serial.println(uv.readUVI());
-  Serial.print("Current UV Energy: "); Serial.println(uv_inst);
-  Serial.print("Total UV absorbed: "); Serial.println(uv_total); 
-  Serial.print("Percent of UV absorbed before burn: "); Serial.println(uv_percent);
-  
-  // Send UV percentage to bluetooth
-  ble.print("Total UV absorbed: "); ble.println(uv_total);
-  ble.print("Percent of UV absorbed before burn: "); ble.println(uv_percent);
-  ble.print("Time to burn: "); ble.println(time_to_burn);
-  
+  switch (state) {
+    case WAIT_FOR_USER:
+      wait_for_user();
+      break;
 
-  if(uv_percent >= 100)
-  {
-    Serial.println("WARNING: maximum UV absorption exceeded");
-    // Send warning to bluetooth
-    ble.println("MAX UV EXCEEDED");
+    case GET_SKIN_TYPE:
+      get_skin_type();
+      break;
+
+    case GET_SPF:
+      get_spf();
+      break;
+
+    case SEND_UV:
+      send_uv();
+      break;
+
+    default:
+      break;
   }
- 
+
+}
+
+void wait_for_user()
+{
+  delay(3000);
+  char message[] = "Ready? ";
+
+  // Send characters to Bluefruit
+  while (strcmp(ble.buffer, "ready") != 0)
+  {
+    Serial.print("[Send] ");
+    Serial.println(message);
+
+    ble.print("AT+BLEUARTTX=");
+    ble.println(message);
+
+    // check response stastus
+    if (! ble.waitForOK() ) {
+      Serial.println(F("Failed to send?"));
+    }
+
+    delay(2000);
+    ble.println("AT+BLEUARTRX");
+    ble.readline();
+  }
+
+  // Some data was found, its in the buffer
+  Serial.print(F("[Recv] ")); Serial.println(ble.buffer);
+  ble.waitForOK();
+  state = GET_SKIN_TYPE;
+}
+
+void get_skin_type()
+{
+  char message[] = "Enter skin type: ";
+  // Send characters to Bluefruit
+  Serial.print("[Send] ");
+  Serial.println(message);
+
+  ble.print("AT+BLEUARTTX=");
+  ble.println(message);
+
+  // check response stastus
+  if (! ble.waitForOK() ) {
+    Serial.println(F("Failed to send?"));
+  }
+  else {
+
+    // Check for incoming characters from Bluefruit
+    while (1)
+    {
+      ble.println("AT+BLEUARTRX");
+      ble.readline();
+      if (isdigit(ble.buffer[0])) {
+        skin_type = atoi(ble.buffer);
+        break;
+      }
+    }
+
+    // Some data was found, its in the buffer
+    Serial.print(F("[Recv] ")); Serial.println(skin_type);
+    ble.waitForOK();
+
+    // Set MED for the skin type
+    switch (skin_type) {
+      case 0:
+        MED = 30e3;
+        break;
+      case 1:
+        MED = 150e3;
+        break;
+      case 2:
+        MED = 250e3;
+        break;
+      case 3:
+        MED = 300e3;
+        break;
+      case 4:
+        MED = 400e3;
+        break;
+      case 5:
+        MED = 600e3;
+        break;
+      case 6:
+        MED = 900e3;
+        break;
+      default:
+        MED = 30e3;
+        break;
+    }
+
+    // transition to the next state
+    state = GET_SPF;
+
+  }
+}
+
+void get_spf()
+{
+  char message[] = "Enter spf: ";
+  // Send characters to Bluefruit
+  Serial.print("[Send] ");
+  Serial.println(message);
+
+  ble.print("AT+BLEUARTTX=");
+  ble.println(message);
+
+  // check response stastus
+  if (! ble.waitForOK() ) {
+    Serial.println(F("Failed to send?"));
+  }
+  else {
+
+    // Check for incoming characters from Bluefruit
+    while (1)
+    {
+      ble.println("AT+BLEUARTRX");
+      ble.readline();
+      if (isdigit(ble.buffer[0])) {
+        SPF = atoi(ble.buffer);
+        break;
+      }
+    }
+
+    // Some data was found, its in the buffer
+    Serial.print(F("[Recv] ")); Serial.println(SPF);
+    ble.waitForOK();
+
+    // transition to the next state
+    Serial.println( F("Switching to DATA mode!") );
+    ble.setMode(BLUEFRUIT_MODE_DATA);
+    state = SEND_UV;
+  }
+}
+
+void send_uv()
+{
+  // Read UV and calculate values to send to bluetooth
+  uv_inst = uv.readUVI() * 25;
+  if (uv_inst < 0.0)
+    uv_inst = 1;
+  uv_total = uv_total + uv_inst;
+  uv_adjusted = uv_total / SPF;
+  uv_percent = (uv_total / (MED * SPF)) * 100;
+  time_to_burn = (MED - uv_adjusted) / (uv_inst * 60);
+
+  Serial.print("UV Index reading: "); Serial.println(uv.readUVI());
+  //Serial.print("Current UV Energy: "); Serial.println(uv_inst);
+  //Serial.print("Total UV absorbed: "); Serial.println(uv_total);
+  Serial.print("Percent of UV absorbed before burn: "); Serial.println(uv_percent);
+  Serial.print("Time to burn: "); Serial.println(time_to_burn);
+
+  // Send UV percentage to bluetooth
+
+  //ble.print("Total UV absorbed: "); ble.println(uv_total);
+  ble.print("q:"); ble.println(uv_total);
+
+  //ble.print("Percent of UV absorbed before burn: "); ble.println(uv_percent);
+  ble.print("p:"); ble.println(uv_percent);
+
+  //ble.print("Time to burn: "); ble.println(time_to_burn);
+  ble.print("t:"); ble.println(time_to_burn);
+
   delay(1000);
 }
